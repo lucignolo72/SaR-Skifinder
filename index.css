@@ -19,3 +19,44 @@ body {
 .border-sar-green {
   @apply border-[#8CC63F];
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, footer, button, .bg-zinc-900\/50, .absolute {
+    display: none !important;
+  }
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .bg-zinc-950 {
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .text-sar-green {
+    color: #5a8a1f !important; /* Darker green for print readability */
+  }
+  .text-zinc-300, .text-zinc-400, .text-zinc-500 {
+    color: #333 !important;
+  }
+  .grid {
+    display: block !important;
+  }
+  .lg\:col-span-3, .lg\:col-span-4 {
+    width: 100% !important;
+  }
+  section {
+    page-break-inside: avoid;
+    margin-bottom: 2rem;
+  }
+  img {
+    max-width: 300px !important;
+    margin: 1rem 0;
+  }
+}
