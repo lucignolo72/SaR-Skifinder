@@ -1,15 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
 import { QUESTIONS, SAR_LOGO } from './constants';
-import { RiderProfile } from './types';
-import { getSkiRecommendation } from './geminiService';
+import { RiderProfile, FullRecommendation, SkiRecommendation } from './types';
+import { getSkiRecommendation, generateSkiImage } from './geminiService';
 
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(-1);
   const [profile, setProfile] = useState<Partial<RiderProfile>>({});
   const [loading, setLoading] = useState(false);
-  const [recommendation, setRecommendation] = useState<string | null>(null);
+  const [recommendation, setRecommendation] = useState<FullRecommendation | string | null>(null);
   const [customInput, setCustomInput] = useState("");
+  const [generatingImages, setGeneratingImages] = useState(false);
 
   const progress = useMemo(() => {
     if (currentStep < 0) return 0;
@@ -31,6 +32,16 @@ const App: React.FC = () => {
       const result = await getSkiRecommendation(newProfile as RiderProfile);
       setLoading(false);
       setRecommendation(result);
+
+      if (typeof result !== 'string' && result !== null) {
+        setGeneratingImages(true);
+        const updatedSkis = await Promise.all(result.skis.map(async (ski) => {
+          const imageUrl = await generateSkiImage(ski.imagePrompt);
+          return { ...ski, imageUrl: imageUrl || undefined };
+        }));
+        setRecommendation({ ...result, skis: updatedSkis });
+        setGeneratingImages(false);
+      }
     }
   };
 
@@ -161,84 +172,184 @@ const App: React.FC = () => {
     );
   };
 
-  const renderResult = () => (
-    <div className="max-w-5xl mx-auto w-full px-6 py-12 animate-in fade-in zoom-in duration-1000">
-      <div className="bg-zinc-950 border-t-4 border-sar-green p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
-        {/* Background decorative elements */}
-        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-          <div className="text-8xl font-black italic select-none text-zinc-800">SaR</div>
-        </div>
-
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-zinc-800 pb-8">
-          <div>
-            <h2 className="text-sar-green font-mono text-sm font-bold uppercase tracking-[0.3em] mb-2">Technical Analysis Report</h2>
-            <h3 className="text-4xl font-black uppercase italic leading-tight">Assetto Consigliato <span className="text-zinc-500">v3.0</span></h3>
-          </div>
-          <div className="flex gap-4">
-             <div className="bg-zinc-900 p-4 border border-zinc-800 text-center min-w-[100px]">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Confidence</div>
-                <div className="text-sar-green font-black text-xl italic">98.4%</div>
-             </div>
-             <div className="bg-zinc-900 p-4 border border-zinc-800 text-center min-w-[100px]">
-                <div className="text-zinc-500 text-[10px] uppercase font-mono">Location</div>
-                <div className="text-white font-black text-xl italic uppercase">Aremogna</div>
-             </div>
+  const renderResult = () => {
+    if (typeof recommendation === 'string') {
+      return (
+        <div className="max-w-5xl mx-auto w-full px-6 py-12 animate-in fade-in zoom-in duration-1000">
+          <div className="bg-zinc-950 border-t-4 border-sar-green p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+             <h3 className="text-2xl font-black uppercase italic mb-4">Analisi Completata</h3>
+             <p className="text-zinc-300 mb-8">{recommendation}</p>
+             <button 
+               onClick={() => { setCurrentStep(-1); setProfile({}); setRecommendation(null); }} 
+               className="bg-sar-green text-black font-black px-8 py-4 uppercase italic skew-x-[-12deg]"
+             >
+               Riavvia Analisi
+             </button>
           </div>
         </div>
+      );
+    }
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-          <div className="lg:col-span-2 space-y-8">
-            {recommendation?.split('\n').map((line, i) => {
-              if (line.trim() === '') return null;
-              const isHeader = line.startsWith('🔹') || line.startsWith('🎿') || line.startsWith('📏') || line.startsWith('❄️') || line.startsWith('⚙️') || line.startsWith('⚠️');
-              
-              return (
-                <div key={i} className={isHeader ? "mt-8 first:mt-0" : "text-zinc-300 leading-relaxed font-light text-lg"}>
-                  {isHeader ? (
-                    <h4 className="flex items-center gap-3 text-sar-green font-black text-xl uppercase italic tracking-tight mb-4 border-l-4 border-sar-green pl-4 py-1 bg-sar-green/5">
-                      {line}
-                    </h4>
-                  ) : line}
-                </div>
-              );
-            })}
+    if (!recommendation) return null;
+
+    return (
+      <div className="max-w-7xl mx-auto w-full px-6 py-12 animate-in fade-in zoom-in duration-1000">
+        <div className="bg-zinc-950 border-t-4 border-sar-green p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
+          {/* Background decorative elements */}
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <div className="text-8xl font-black italic select-none text-zinc-800">SaR</div>
           </div>
 
-          <div className="space-y-6">
-            <div className="bg-zinc-900/50 p-6 border border-zinc-800">
-               <h5 className="text-white font-black uppercase italic mb-4 text-sm border-b border-zinc-800 pb-2">Rider Tech Specs</h5>
-               <div className="space-y-3 font-mono text-xs">
-                 {Object.entries(profile).map(([key, val]) => (
-                   <div key={key} className="flex justify-between">
-                     <span className="text-zinc-500 uppercase">{key}:</span>
-                     <span className="text-sar-green uppercase">{val}</span>
-                   </div>
-                 ))}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-zinc-800 pb-8">
+            <div>
+              <h2 className="text-sar-green font-mono text-sm font-bold uppercase tracking-[0.3em] mb-2">Technical Analysis Report</h2>
+              <h3 className="text-4xl font-black uppercase italic leading-tight">Assetto Consigliato <span className="text-zinc-500">v4.0</span></h3>
+            </div>
+            <div className="flex gap-4">
+               <div className="bg-zinc-900 p-4 border border-zinc-800 text-center min-w-[100px]">
+                  <div className="text-zinc-500 text-[10px] uppercase font-mono">Confidence</div>
+                  <div className="text-sar-green font-black text-xl italic">98.4%</div>
+               </div>
+               <div className="bg-zinc-900 p-4 border border-zinc-800 text-center min-w-[100px]">
+                  <div className="text-zinc-500 text-[10px] uppercase font-mono">Status</div>
+                  <div className="text-white font-black text-xl italic uppercase">{generatingImages ? 'GENERATING_VISUALS' : 'READY'}</div>
                </div>
             </div>
-            
-            <div className="bg-sar-green p-6 text-black">
-               <h5 className="font-black uppercase italic mb-2">SaR Philosophy</h5>
-               <p className="text-sm font-bold leading-tight">
-                 "La scelta dello sci non è marketing, è fisica applicata al divertimento. Scia consapevole, scia forte."
-               </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
+            <div className="lg:col-span-3 space-y-12">
+              {/* Technical Analysis */}
+              <section>
+                <h4 className="text-sar-green font-black text-xl uppercase italic tracking-tight mb-4 border-l-4 border-sar-green pl-4 py-1 bg-sar-green/5">
+                  🔹 ANALISI TECNICA
+                </h4>
+                <p className="text-zinc-300 leading-relaxed font-light text-lg">
+                  {recommendation.technicalAnalysis}
+                </p>
+              </section>
+
+              {/* Ski Cards */}
+              <section>
+                <h4 className="text-sar-green font-black text-xl uppercase italic tracking-tight mb-6 border-l-4 border-sar-green pl-4 py-1 bg-sar-green/5">
+                  🎿 SCI CONSIGLIATI
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {recommendation.skis.map((ski, idx) => (
+                    <div key={idx} className="group bg-zinc-900 border border-zinc-800 flex flex-col overflow-hidden hover:border-sar-green transition-all">
+                      <div className="aspect-[4/3] bg-zinc-800 relative overflow-hidden">
+                        {ski.imageUrl ? (
+                          <img src={ski.imageUrl} alt={`${ski.brand} ${ski.model}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 font-mono text-[10px] text-center p-4 gap-3">
+                            {generatingImages ? (
+                              <>
+                                <div className="w-6 h-6 border-2 border-sar-green border-t-transparent rounded-full animate-spin"></div>
+                                GENERAZIONE IMMAGINE...
+                              </>
+                            ) : 'IMMAGINE NON DISPONIBILE'}
+                          </div>
+                        )}
+                        <div className="absolute top-4 right-4 bg-sar-green text-black font-black px-3 py-1 text-[10px] skew-x-[-12deg] shadow-lg">
+                          {ski.approxPrice}
+                        </div>
+                      </div>
+                      <div className="p-6 flex-1 flex flex-col">
+                        <div className="mb-4">
+                          <div className="text-zinc-500 font-mono text-[10px] uppercase">{ski.brand} // {ski.year}</div>
+                          <h5 className="text-xl font-black uppercase italic text-white leading-tight">{ski.model}</h5>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-6 flex-1 leading-snug">{ski.description}</p>
+                        
+                        <div className="space-y-4 pt-4 border-t border-zinc-800">
+                          <div>
+                            <div className="text-[10px] font-mono uppercase text-sar-green mb-2 tracking-widest">PRO</div>
+                            <ul className="space-y-1">
+                              {ski.pros.map((pro, i) => (
+                                <li key={i} className="text-[11px] text-zinc-300 flex items-start gap-2">
+                                  <span className="text-sar-green font-bold">+</span> {pro}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-mono uppercase text-red-500 mb-2 tracking-widest">CONTRO</div>
+                            <ul className="space-y-1">
+                              {ski.cons.map((con, i) => (
+                                <li key={i} className="text-[11px] text-zinc-300 flex items-start gap-2">
+                                  <span className="text-red-500 font-bold">-</span> {con}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Other Specs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <section>
+                  <h4 className="text-sar-green font-black text-lg uppercase italic tracking-tight mb-4 border-l-4 border-sar-green pl-4 py-1 bg-sar-green/5">
+                    📏 LUNGHEZZA
+                  </h4>
+                  <p className="text-zinc-300 text-sm leading-relaxed">{recommendation.lengthRecommendation}</p>
+                </section>
+                <section>
+                  <h4 className="text-sar-green font-black text-lg uppercase italic tracking-tight mb-4 border-l-4 border-sar-green pl-4 py-1 bg-sar-green/5">
+                    ⚙️ SETUP
+                  </h4>
+                  <p className="text-zinc-300 text-sm leading-relaxed">{recommendation.setup}</p>
+                </section>
+              </div>
+
+              <section className="bg-red-950/20 border border-red-900/50 p-6">
+                <h4 className="text-red-500 font-black text-lg uppercase italic tracking-tight mb-2 flex items-center gap-2">
+                  ⚠️ NOTA SICUREZZA
+                </h4>
+                <p className="text-zinc-300 text-sm leading-relaxed italic">{recommendation.safetyNote}</p>
+              </section>
             </div>
 
-            <button 
-              onClick={() => {
-                setCurrentStep(-1);
-                setProfile({});
-                setRecommendation(null);
-              }}
-              className="w-full bg-zinc-800 hover:bg-white hover:text-black text-white font-black py-4 uppercase italic transition-all skew-x-[-12deg]"
-            >
-              Riavvia Analisi
-            </button>
+            {/* Sidebar */}
+            <div className="space-y-6">
+              <div className="bg-zinc-900/50 p-6 border border-zinc-800">
+                 <h5 className="text-white font-black uppercase italic mb-4 text-sm border-b border-zinc-800 pb-2">Rider Tech Specs</h5>
+                 <div className="space-y-3 font-mono text-xs">
+                   {Object.entries(profile).map(([key, val]) => (
+                     <div key={key} className="flex justify-between">
+                       <span className="text-zinc-500 uppercase">{key}:</span>
+                       <span className="text-sar-green uppercase">{val}</span>
+                     </div>
+                   ))}
+                 </div>
+              </div>
+              
+              <div className="bg-sar-green p-6 text-black">
+                 <h5 className="font-black uppercase italic mb-2">Expert Tip</h5>
+                 <p className="text-sm font-bold leading-tight italic">
+                   "{recommendation.expertTip}"
+                 </p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setCurrentStep(-1);
+                  setProfile({});
+                  setRecommendation(null);
+                }}
+                className="w-full bg-zinc-800 hover:bg-white hover:text-black text-white font-black py-4 uppercase italic transition-all skew-x-[-12deg]"
+              >
+                Riavvia Analisi
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col font-sans selection:bg-sar-green selection:text-black">
@@ -279,7 +390,7 @@ const App: React.FC = () => {
           <div className="w-full h-full flex items-center justify-center">
             {currentStep === -1 && renderWelcome()}
             {currentStep >= 0 && currentStep < QUESTIONS.length && renderStep()}
-            {recommendation && renderResult()}
+            {currentStep === QUESTIONS.length && recommendation && renderResult()}
           </div>
         )}
       </main>

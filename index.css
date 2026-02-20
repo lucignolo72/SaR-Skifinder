@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sar-green: #8CC63F;
+}
+
+body {
+  @apply bg-[#050505] text-white font-sans;
+}
+
+.text-sar-green {
+  @apply text-[#8CC63F];
+}
+
+.bg-sar-green {
+  @apply bg-[#8CC63F];
+}
+
+.border-sar-green {
+  @apply border-[#8CC63F];
+}
